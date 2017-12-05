@@ -21,6 +21,9 @@ type ImageMgr interface {
 
 	// Search Images from specified registry.
 	SearchImages(ctx context.Context, name string, registry string) ([]types.SearchResultItem, error)
+
+	// RemoveImage deletes an image by reference.
+	RemoveImage(ctx context.Context, name string, option *ctrd.ImageRemoveOption) error
 }
 
 // ImageManager is an implementation of interface ImageMgr.
@@ -88,4 +91,10 @@ func (mgr *ImageManager) SearchImages(ctx context.Context, name string, registry
 	}
 
 	return nil, nil
+}
+
+// RemoveImage deletes an image by reference
+// TODO: Should support delete an image by specify image ID
+func (mgr *ImageManager) RemoveImage(ctx context.Context, name string, option *ctrd.ImageRemoveOption) error {
+	return mgr.client.RemoveImage(ctx, name)
 }
