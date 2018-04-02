@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.3.0 (2018-03-30)
+## 0.3.0 (2018-03-31)
 
 **IMPORTANT**: Pouch 0.3.0 has met almost all your basic needs for kubernetes:
 
