@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alibaba/pouch/apis/metrics"
 	"github.com/alibaba/pouch/apis/types"
 	"github.com/alibaba/pouch/daemon/mgr"
 	"github.com/alibaba/pouch/pkg/httputils"
@@ -22,6 +23,12 @@ import (
 )
 
 func (s *Server) createContainer(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "create"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	config := &types.ContainerCreateConfig{}
 	reader := req.Body
 	// decode request body
@@ -55,6 +62,8 @@ func (s *Server) createContainer(ctx context.Context, rw http.ResponseWriter, re
 	if err != nil {
 		return err
 	}
+
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
 
 	return EncodeResponse(rw, http.StatusCreated, container)
 }
@@ -171,6 +180,12 @@ func (s *Server) getContainers(ctx context.Context, rw http.ResponseWriter, req 
 }
 
 func (s *Server) startContainer(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "start"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	name := mux.Vars(req)["name"]
 
 	options := &types.ContainerStartOptions{
@@ -183,6 +198,8 @@ func (s *Server) startContainer(ctx context.Context, rw http.ResponseWriter, req
 		return err
 	}
 
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
+
 	rw.WriteHeader(http.StatusNoContent)
 	return nil
 }
@@ -192,6 +209,11 @@ func (s *Server) restartContainer(ctx context.Context, rw http.ResponseWriter, r
 		t   int
 		err error
 	)
+	label := "restart"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
 
 	if v := req.FormValue("t"); v != "" {
 		if t, err = strconv.Atoi(v); err != nil {
@@ -205,6 +227,8 @@ func (s *Server) restartContainer(ctx context.Context, rw http.ResponseWriter, r
 		return err
 	}
 
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
+
 	rw.WriteHeader(http.StatusNoContent)
 	return nil
 }
@@ -214,6 +238,12 @@ func (s *Server) stopContainer(ctx context.Context, rw http.ResponseWriter, req 
 		t   int
 		err error
 	)
+
+	label := "stop"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
 
 	if v := req.FormValue("t"); v != "" {
 		if t, err = strconv.Atoi(v); err != nil {
@@ -226,6 +256,8 @@ func (s *Server) stopContainer(ctx context.Context, rw http.ResponseWriter, req 
 	if err = s.ContainerMgr.Stop(ctx, name, int64(t)); err != nil {
 		return err
 	}
+
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
 
 	rw.WriteHeader(http.StatusNoContent)
 	return nil
@@ -254,6 +286,12 @@ func (s *Server) unpauseContainer(ctx context.Context, rw http.ResponseWriter, r
 }
 
 func (s *Server) renameContainer(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "rename"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	oldName := mux.Vars(req)["name"]
 	newName := req.FormValue("name")
 
@@ -264,6 +302,8 @@ func (s *Server) renameContainer(ctx context.Context, rw http.ResponseWriter, re
 	if err := s.ContainerMgr.Rename(ctx, oldName, newName); err != nil {
 		return err
 	}
+
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
 
 	rw.WriteHeader(http.StatusNoContent)
 	return nil
@@ -295,6 +335,12 @@ func (s *Server) attachContainer(ctx context.Context, rw http.ResponseWriter, re
 }
 
 func (s *Server) updateContainer(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "update"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	config := &types.UpdateConfig{}
 
 	// set pre update hook plugin
@@ -318,11 +364,19 @@ func (s *Server) updateContainer(ctx context.Context, rw http.ResponseWriter, re
 		return httputils.NewHTTPError(err, http.StatusInternalServerError)
 	}
 
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
+
 	rw.WriteHeader(http.StatusOK)
 	return nil
 }
 
 func (s *Server) upgradeContainer(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "upgrade"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	config := &types.ContainerUpgradeConfig{}
 	// decode request body
 	if err := json.NewDecoder(req.Body).Decode(config); err != nil {
@@ -338,6 +392,8 @@ func (s *Server) upgradeContainer(ctx context.Context, rw http.ResponseWriter, r
 	if err := s.ContainerMgr.Upgrade(ctx, name, config); err != nil {
 		return err
 	}
+
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
 
 	rw.WriteHeader(http.StatusOK)
 	return nil
@@ -427,6 +483,12 @@ func (s *Server) resizeContainer(ctx context.Context, rw http.ResponseWriter, re
 }
 
 func (s *Server) removeContainers(ctx context.Context, rw http.ResponseWriter, req *http.Request) error {
+	label := "delete"
+	metrics.ContainerActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ContainerActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	name := mux.Vars(req)["name"]
 
 	option := &types.ContainerRemoveOptions{
@@ -439,6 +501,8 @@ func (s *Server) removeContainers(ctx context.Context, rw http.ResponseWriter, r
 	if err := s.ContainerMgr.Remove(ctx, name, option); err != nil {
 		return err
 	}
+
+	metrics.ContainerSuccessActionsCounter.WithLabelValues(label).Inc()
 
 	rw.WriteHeader(http.StatusNoContent)
 	return nil

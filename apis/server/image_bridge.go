@@ -33,9 +33,13 @@ func (s *Server) pullImage(ctx context.Context, rw http.ResponseWriter, req *htt
 		image = image + ":" + tag
 	}
 
+	label := "pull"
+	metrics.ImageActionsCounter.WithLabelValues(label).Inc()
+
 	// record the time spent during image pull procedure.
 	defer func(start time.Time) {
 		metrics.ImagePullSummary.WithLabelValues(image).Observe(metrics.SinceInMicroseconds(start))
+		metrics.ImageActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
 	}(time.Now())
 
 	// get registry auth from Request header
@@ -52,6 +56,7 @@ func (s *Server) pullImage(ctx context.Context, rw http.ResponseWriter, req *htt
 		logrus.Errorf("failed to pull image %s: %v", image, err)
 		return nil
 	}
+	metrics.ImageSuccessActionsCounter.WithLabelValues(label).Inc()
 	return nil
 }
 
@@ -104,6 +109,12 @@ func (s *Server) removeImage(ctx context.Context, rw http.ResponseWriter, req *h
 		return err
 	}
 
+	label := "delete"
+	metrics.ImageActionsCounter.WithLabelValues(label).Inc()
+	defer func(start time.Time) {
+		metrics.ImageActionsTimer.WithLabelValues(label).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	isForce := httputils.BoolValue(req, "force")
 	// We only should check the image whether used by container when there is only one primary reference.
 	if len(refs) == 1 {
@@ -125,6 +136,7 @@ func (s *Server) removeImage(ctx context.Context, rw http.ResponseWriter, req *h
 		return err
 	}
 
+	metrics.ImageSuccessActionsCounter.WithLabelValues(label).Inc()
 	rw.WriteHeader(http.StatusNoContent)
 	return nil
 }
