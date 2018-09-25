@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +28,10 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-const manifestSizeLimit = 8e6 // 8MB
+const (
+	manifestSizeLimit            = 8e6 // 8MB
+	labelDockerSchema1EmptyLayer = "containerd.io/docker.schema1.empty.layer"
+)
 
 type blobState struct {
 	diffID digest.Digest
@@ -236,8 +240,13 @@ tryit:
 			return err
 		}
 
-		// TODO: Check if blob -> diff id mapping already exists
-		// TODO: Check if blob empty label exists
+		reuse, err := c.reuseLabelBlobState(ctx, desc)
+		if err != nil {
+			return err
+		}
+		if reuse {
+			return nil
+		}
 
 		ra, err := c.contentStore.ReaderAt(ctx, desc.Digest)
 		if err != nil {
@@ -309,6 +318,18 @@ tryit:
 
 	state := calc.State()
 
+	cinfo := content.Info{
+		Digest: desc.Digest,
+		Labels: map[string]string{
+			"containerd.io/uncompressed": state.diffID.String(),
+			labelDockerSchema1EmptyLayer: strconv.FormatBool(state.empty),
+		},
+	}
+
+	if _, err := c.contentStore.Update(ctx, cinfo, "labels.containerd.io/uncompressed", fmt.Sprintf("labels.%s", labelDockerSchema1EmptyLayer)); err != nil {
+		return errors.Wrap(err, "failed to update uncompressed label")
+	}
+
 	c.mu.Lock()
 	c.blobMap[desc.Digest] = state
 	c.layerBlobs[state.diffID] = desc
@@ -316,6 +337,51 @@ tryit:
 
 	return nil
 }
+
+func (c *Converter) reuseLabelBlobState(ctx context.Context, desc ocispec.Descriptor) (bool, error) {
+	cinfo, err := c.contentStore.Info(ctx, desc.Digest)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get blob info")
+	}
+
+	emptyVal, ok := cinfo.Labels[labelDockerSchema1EmptyLayer]
+	if !ok {
+		return false, nil
+	}
+
+	isEmpty, err := strconv.ParseBool(emptyVal)
+	if err != nil {
+		log.G(ctx).WithField("id", desc.Digest).Warnf("failed to parse bool from label %s: %v", labelDockerSchema1EmptyLayer, emptyVal)
+		return false, nil
+	}
+
+	desc.Size = cinfo.Size
+	diffID, ok := cinfo.Labels["containerd.io/uncompressed"]
+	if !ok {
+		return false, nil
+	}
+
+	bState := blobState{empty: isEmpty}
+	if bState.diffID, err = digest.Parse(diffID); err != nil {
+		log.G(ctx).WithField("id", desc.Digest).Warnf("failed to parse digest from label containerd.io/uncompressed: %v", diffID)
+		return false, nil
+	}
+
+	// NOTE: there is no need to read header to get compression method
+	// because there are only two kinds of methods.
+	if bState.diffID == desc.Digest {
+		desc.MediaType = images.MediaTypeDockerSchema2Layer
+	} else {
+		desc.MediaType = images.MediaTypeDockerSchema2LayerGzip
+	}
+
+	c.mu.Lock()
+	c.blobMap[desc.Digest] = bState
+	c.layerBlobs[bState.diffID] = desc
+	c.mu.Unlock()
+	return true, nil
+}
+
 func (c *Converter) schema1ManifestHistory() ([]ocispec.History, []digest.Digest, error) {
 	if c.pulledManifest == nil {
 		return nil, nil, errors.New("missing schema 1 manifest for conversion")
