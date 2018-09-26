@@ -1192,6 +1192,11 @@ func toCNIPortMappings(criPortMappings []*runtime.PortMapping) []ocicni.PortMapp
 
 func updateNetworkEnv(createConfig *apitypes.ContainerCreateConfig, meta *SandboxMeta) error {
 	// TODO: only support ipv4
+	// skip kata container
+	if meta.Runtime == "kata-runtime" {
+		return nil
+	}
+
 	netNSPath := meta.NetNSPath
 
 	// skip sandbox pod is host mode.
