@@ -75,7 +75,6 @@ func (s *Server) Start(readyCh chan bool) (err error) {
 				ErrorLog:          log.New(stdFilterLogWriter, "", 0),
 				ReadTimeout:       time.Minute * 10,
 				ReadHeaderTimeout: time.Minute * 10,
-				WriteTimeout:      time.Minute * 10,
 				IdleTimeout:       time.Minute * 10,
 			}
 			errCh <- s.Serve(l)
