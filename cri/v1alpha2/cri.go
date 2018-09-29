@@ -242,12 +242,27 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	}
 
 	id := createResp.ID
+
+	// once sandbox container created, we are obligated to store it.
+	sandboxMeta := &SandboxMeta{
+		ID:      id,
+		Config:  config,
+		Runtime: config.Annotations[anno.KubernetesRuntime],
+	}
+	if err := c.SandboxStore.Put(sandboxMeta); err != nil {
+		return nil, err
+	}
+
+	// If running sandbox failed, clean up the container.
 	defer func() {
-		// If running sandbox failed, clean up the container.
 		if retErr != nil {
 			err := c.ContainerMgr.Remove(ctx, id, &apitypes.ContainerRemoveOptions{Volumes: true, Force: true})
 			if err != nil {
 				logrus.Errorf("failed to remove the container when running sandbox failed: %v", err)
+			} else {
+				// should not remove the sandbox container metadata from sandboxStore
+				// until it was removed by pouchd.
+				c.SandboxStore.Remove(id)
 			}
 		}
 	}()
@@ -302,12 +317,8 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		}()
 	}
 
-	sandboxMeta := &SandboxMeta{
-		ID:        id,
-		Config:    config,
-		NetNSPath: netnsPath,
-		Runtime:   config.Annotations[anno.KubernetesRuntime],
-	}
+	// update the metadata of sandbox container after network had been set up successfully.
+	sandboxMeta.NetNSPath = netnsPath
 	if err := c.SandboxStore.Put(sandboxMeta); err != nil {
 		return nil, err
 	}
