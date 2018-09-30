@@ -123,6 +123,11 @@ func (c ContPlugin) PreCreate(createConfig *ContainerCreateConfig) error {
 		}
 	}
 
+	createConfig.HostConfig.CapAdd = append(createConfig.HostConfig.CapAdd, "SYS_RESOURCE", "SYS_MODULE",
+		"SYS_PTRACE", "SYS_PACCT", "NET_ADMIN", "SYS_ADMIN")
+
+	createConfig.HostConfig.CapAdd = utils.UniqueStringSlice(createConfig.HostConfig.CapAdd)
+
 	// common vm use rich container which introduced by pouch
 	if getEnv(env, "ali_run_mode") == "vm" || getEnv(env, "ali_run_mode") == "common_vm" {
 		// change common_vm to vm
@@ -146,11 +151,6 @@ func (c ContPlugin) PreCreate(createConfig *ContainerCreateConfig) error {
 			}
 			createConfig.Env = append(createConfig.Env, fmt.Sprintf("%s=%s", escapseLableToEnvName(k), v))
 		}
-
-		createConfig.HostConfig.CapAdd = append(createConfig.HostConfig.CapAdd, "SYS_RESOURCE", "SYS_MODULE",
-			"SYS_PTRACE", "SYS_PACCT", "NET_ADMIN", "SYS_ADMIN")
-
-		createConfig.HostConfig.CapAdd = utils.UniqueStringSlice(createConfig.HostConfig.CapAdd)
 
 		//don't bind /etc/hosts /etc/hostname /etc/resolv.conf files into container
 		createConfig.DisableNetworkFiles = true
