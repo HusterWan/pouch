@@ -170,11 +170,11 @@ func NewCriManager(config *config.Config, ctrMgr mgr.ContainerMgr, imgMgr mgr.Im
 		return nil, fmt.Errorf("failed to get imagefs uuid of %q: %v", imageFSPath, err)
 	}
 
-	snapshotsSyncer := ctrMgr.NewSnapshotsSyncer(
-		c.SnapshotStore,
-		time.Duration(statsCollectPeriod)*time.Second,
-	)
-	snapshotsSyncer.Start()
+	//snapshotsSyncer := ctrMgr.NewSnapshotsSyncer(
+	//	c.SnapshotStore,
+	//	time.Duration(statsCollectPeriod)*time.Second,
+	//)
+	//snapshotsSyncer.Start()
 
 	return NewCriWrapper(c), nil
 }
