@@ -179,11 +179,11 @@ func NewCriManager(config *config.Config, ctrMgr mgr.ContainerMgr, imgMgr mgr.Im
 	c.imageFSPath = imageFSPath(path.Join(config.HomeDir, "containerd/root"), defaultSnapshotterName)
 	logrus.Infof("Get image filesystem path %q", c.imageFSPath)
 
-	snapshotsSyncer := ctrMgr.NewSnapshotsSyncer(
-		c.SnapshotStore,
-		time.Duration(statsCollectPeriod)*time.Second,
-	)
-	snapshotsSyncer.Start()
+	//snapshotsSyncer := ctrMgr.NewSnapshotsSyncer(
+	//	c.SnapshotStore,
+	//	time.Duration(statsCollectPeriod)*time.Second,
+	//)
+	//snapshotsSyncer.Start()
 
 	return NewCriWrapper(c), nil
 }
