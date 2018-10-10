@@ -487,14 +487,14 @@ func setupSandboxFiles(sandboxRootDir string, config *runtime.PodSandboxConfig) 
 
 // setupPodNetwork sets up the network of PodSandbox and return the netnsPath of PodSandbox
 // and do nothing when networkNamespaceMode equals runtime.NamespaceMode_NODE.
-func (c *CriManager) setupPodNetwork(ctx context.Context, id string, config *runtime.PodSandboxConfig) (string, error) {
+func (c *CriManager) setupPodNetwork(ctx context.Context, id string, config *runtime.PodSandboxConfig) error {
 	container, err := c.ContainerMgr.Get(ctx, id)
 	if err != nil {
-		return "", err
+		return err
 	}
 	netnsPath := containerNetns(container)
 	if netnsPath == "" {
-		return "", fmt.Errorf("failed to find network namespace path for sandbox %q", id)
+		return fmt.Errorf("failed to find network namespace path for sandbox %q", id)
 	}
 
 	err = c.CniMgr.SetUpPodNetwork(&ocicni.PodNetwork{
@@ -505,10 +505,10 @@ func (c *CriManager) setupPodNetwork(ctx context.Context, id string, config *run
 		PortMappings: toCNIPortMappings(config.GetPortMappings()),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return netnsPath, nil
+	return nil
 }
 
 // Container related tool functions.
@@ -737,7 +737,7 @@ func applyContainerSecurityContext(lc *runtime.LinuxContainerConfig, podSandboxI
 }
 
 // Apply Linux-specific options if applicable.
-func (c *CriManager) updateCreateConfig(createConfig *apitypes.ContainerCreateConfig, config *runtime.ContainerConfig, sandboxConfig *runtime.PodSandboxConfig, podSandboxID string) error {
+func (c *CriManager) updateCreateConfig(createConfig *apitypes.ContainerCreateConfig, config *runtime.ContainerConfig, sandboxConfig *runtime.PodSandboxConfig, podSandboxID string, netNSPath string) error {
 	// Apply runtime options.
 	res, err := c.SandboxStore.Get(podSandboxID)
 	if err != nil {
@@ -748,7 +748,7 @@ func (c *CriManager) updateCreateConfig(createConfig *apitypes.ContainerCreateCo
 		createConfig.HostConfig.Runtime = sandboxMeta.Runtime
 	}
 
-	if err := updateNetworkEnv(createConfig, sandboxMeta); err != nil {
+	if err := updateNetworkEnv(createConfig, sandboxMeta, netNSPath); err != nil {
 		return errors.Wrapf(err, "failed to update sandbox: (%s) cni network information to container env", podSandboxID)
 	}
 	logrus.Debugf("update network env: (%v)", createConfig.Env)
@@ -1189,14 +1189,12 @@ func toCNIPortMappings(criPortMappings []*runtime.PortMapping) []ocicni.PortMapp
 	return portMappings
 }
 
-func updateNetworkEnv(createConfig *apitypes.ContainerCreateConfig, meta *SandboxMeta) error {
+func updateNetworkEnv(createConfig *apitypes.ContainerCreateConfig, meta *SandboxMeta, netNSPath string) error {
 	// TODO: only support ipv4
 	// skip kata container
 	if meta.Runtime == "kata-runtime" {
 		return nil
 	}
-
-	netNSPath := meta.NetNSPath
 
 	// skip sandbox pod is host mode.
 	nsOpts := meta.Config.GetLinux().GetSecurityContext().GetNamespaceOptions()
