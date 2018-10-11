@@ -123,25 +123,6 @@ func (s *Server) getContainers(ctx context.Context, rw http.ResponseWriter, req 
 		return err
 	}
 
-	if filterStr := req.FormValue("filters"); filterStr != "" {
-		r := strings.NewReader(filterStr)
-		d := json.NewDecoder(r)
-		m := map[string][]string{}
-		if deprecatedErr := d.Decode(&m); deprecatedErr == nil {
-			if len(m["id"]) > 0 {
-				idSet := map[string]struct{}{}
-				for _, oneId := range m["id"] {
-					idSet[oneId] = struct{}{}
-				}
-				for i := len(cons) - 1; i >= 0; i-- {
-					if _, ok := idSet[cons[i].ID]; !ok {
-						cons = append(cons[:i], cons[i+1:]...)
-					}
-				}
-			}
-		}
-	}
-
 	containerList := make([]types.Container, 0, len(cons))
 
 	for _, c := range cons {
