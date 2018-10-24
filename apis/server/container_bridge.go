@@ -43,6 +43,11 @@ func (s *Server) createContainer(ctx context.Context, rw http.ResponseWriter, re
 	logCreateOptions("container", config)
 
 	name := req.FormValue("name")
+	//consider set specific id by url params
+	specificID := req.FormValue("specificId")
+	if specificID != "" {
+		config.SpecificID = specificID
+	}
 
 	if utils.IsStale(ctx, req) {
 		if strings.HasPrefix(name, "/") {
