@@ -162,9 +162,19 @@ func (v *Volume) SetLabel(label, value string) {
 	v.Labels[label] = value
 }
 
-// Size returns volume's size(MB).
+// Size returns volume's size(bytes).
 func (v *Volume) Size() string {
-	return v.Spec.Size
+	if v.Spec.Size != "" {
+		return v.Spec.Size
+	}
+
+	for _, k := range []string{"size", "Size", "opt.size", "opt.Size"} {
+		if s, ok := v.Spec.Extra[k]; ok {
+			return s
+		}
+	}
+
+	return ""
 }
 
 // FileSystem returns volume's file system.

@@ -229,11 +229,8 @@ func (c *Core) ListVolumes(labels map[string]string) ([]*types.Volume, error) {
 	ctx := driver.Contexts()
 
 	var realVolumes = map[string]*types.Volume{}
-	var volumeDrivers = map[string]driver.Driver{}
 
 	for _, dv := range drivers {
-		volumeDrivers[dv.Name(ctx)] = dv
-
 		d, ok := dv.(driver.Lister)
 		if !ok {
 			// not Lister, ignore it.
@@ -256,13 +253,11 @@ func (c *Core) ListVolumes(labels map[string]string) ([]*types.Volume, error) {
 			continue
 		}
 
-		d, ok := volumeDrivers[v.Spec.Backend]
-		if !ok {
-			// driver not exist, ignore it
+		d, err := driver.Get(v.Spec.Backend)
+		if err != nil || d == nil {
 			continue
 		}
 
-		// the local driver and tmpfs driver
 		if d.StoreMode(ctx).IsLocal() {
 			retVolumes = append(retVolumes, v)
 			continue
