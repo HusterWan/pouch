@@ -225,14 +225,44 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	}
 
 	// Step 2: Create the sandbox container.
+
+	// prepare the sandboxID and store it.
+	id, err := c.generateSandboxID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sandboxMeta := &SandboxMeta{
+		ID: id,
+	}
+	if err := c.SandboxStore.Put(sandboxMeta); err != nil {
+		return nil, err
+	}
+
+	// If running sandbox failed, clean up the sandboxMeta from sandboxStore.
+	// We should clean it until the container has been removed successfully by Pouchd.
+	removeContainerErr := false
+	defer func() {
+		if retErr != nil && !removeContainerErr {
+			if err := c.SandboxStore.Remove(id); err != nil {
+				logrus.Errorf("failed to remove the metadata of container %q from sandboxStore: %v", id, err)
+			}
+		}
+	}()
+
+	// applies the annotations extended.
+	if err := c.applySandboxAnnotations(sandboxMeta, config.Annotations); err != nil {
+		return nil, err
+	}
+
 	createConfig, err := makeSandboxPouchConfig(config, image)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make sandbox pouch config for pod %q: %v", config.Metadata.Name, err)
 	}
+	createConfig.SpecificID = id
 
 	sandboxName := makeSandboxName(config)
 
-	createResp, err := c.ContainerMgr.Create(ctx, sandboxName, createConfig)
+	_, err = c.ContainerMgr.Create(ctx, sandboxName, createConfig)
 	if err != nil {
 		createResp, err = c.recoverFromCreationConflict(ctx, sandboxName, createConfig, err)
 	}
@@ -241,14 +271,8 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		return nil, fmt.Errorf("failed to create a sandbox for pod %q: %v", config.Metadata.Name, err)
 	}
 
-	id := createResp.ID
-
 	// once sandbox container created, we are obligated to store it.
-	sandboxMeta := &SandboxMeta{
-		ID:      id,
-		Config:  config,
-		Runtime: config.Annotations[anno.KubernetesRuntime],
-	}
+	sandboxMeta.Config = config
 	if err := c.SandboxStore.Put(sandboxMeta); err != nil {
 		return nil, err
 	}
@@ -256,13 +280,9 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	// If running sandbox failed, clean up the container.
 	defer func() {
 		if retErr != nil {
-			err := c.ContainerMgr.Remove(ctx, id, &apitypes.ContainerRemoveOptions{Volumes: true, Force: true})
-			if err != nil {
-				logrus.Errorf("failed to remove the container when running sandbox failed: %v", err)
-			} else {
-				// should not remove the sandbox container metadata from sandboxStore
-				// until it was removed by pouchd.
-				c.SandboxStore.Remove(id)
+			if err := c.ContainerMgr.Remove(ctx, id, &apitypes.ContainerRemoveOptions{Volumes: true, Force: true}); err != nil {
+				removeContainerErr = true
+				logrus.Errorf("failed to remove container when running sandbox failed %q: %v", id, err)
 			}
 		}
 	}()
