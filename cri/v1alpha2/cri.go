@@ -262,7 +262,7 @@ func (c *CriManager) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 
 	sandboxName := makeSandboxName(config)
 
-	_, err = c.ContainerMgr.Create(ctx, sandboxName, createConfig)
+	createResp, err := c.ContainerMgr.Create(ctx, sandboxName, createConfig)
 	if err != nil {
 		createResp, err = c.recoverFromCreationConflict(ctx, sandboxName, createConfig, err)
 	}
