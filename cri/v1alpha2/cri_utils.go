@@ -305,19 +305,6 @@ func (c *CriManager) applySandboxAnnotations(sandboxMeta *SandboxMeta, annotatio
 			return err
 		}
 	}
-
-	// apply the annotation of io.kubernetes.lxcfs.enabled
-	// which specify whether to enable lxcfs for a container.
-	if lxcfsEnabled, ok := annotations[anno.LxcfsEnabled]; ok {
-		enableLxcfs, err := strconv.ParseBool(lxcfsEnabled)
-		if err != nil {
-			return err
-		}
-		sandboxMeta.LxcfsEnabled = enableLxcfs
-		if err := c.SandboxStore.Put(sandboxMeta); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
